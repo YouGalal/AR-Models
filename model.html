@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<head>
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel="stylesheet" href="./css/styles.css">
+	<title>3D Models</title>
+
+	<script src='js/three.js'></script> <!-- three.js library -->
+	<script src='js/loaders/OBJLoader.js'></script>
+	<script src='js/loaders/MTLLoader.js'></script>
+	<script src="js/loaders/GLTFLoader.js"></script>
+	<script src="js/loaders/DRACOLoader.js"></script>
+
+	<script src="jsartoolkit5/artoolkit.min.js"></script> <!-- jsartoolkit5 library -->
+	<script src="jsartoolkit5/artoolkit.api.js"></script>
+
+	<script src="threex/threex-artoolkitsource.js"></script> <!-- threex library -->
+	<script src="threex/threex-artoolkitcontext.js"></script>
+	<script src="threex/threex-arbasecontrols.js"></script>
+	<script src="threex/threex-armarkercontrols.js"></script>
+</head>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+
+<select id="modelSelector">
+	<option value="model1">Model 1</option>
+	<option value="model2">Model 2</option>
+	<option value="model3">Model 3</option>
+	<option value="model4">Model 4</option>
+</select>
+
+<div id="opacityContainer">
+    <label for="opacitySlider">Opacity </label>
+    <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="1" />
+</div>
+
+<script>
+
+var scene, camera, renderer, clock, deltaTime, totalTime;
+var arToolkitSource, arToolkitContext;
+var markerRoot1;
+var mesh1;
+
+let models = {}; 
+let currentModel = null; // Currently displayed model
+
+initialize();
+loadModels()
+animate();
+
+// Get Users Geolocation -> Browsers will always ask for permission
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            console.log('Latitude:', position.coords.latitude);
+            console.log('Longitude:', position.coords.longitude);
+        },
+        (error) => {
+            console.error('Error getting location:', error);
+        }
+    );
+} else {
+    console.error('Geolocation is not supported by this browser.');
+}
+
+function initialize()
+{
+	scene = new THREE.Scene();
+
+	let hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x666666, 0.8);
+    scene.add( hemisphereLight );
+
+	let directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 1, 1).normalize();
+    scene.add(directionalLight);
+
+	directionalLight.castShadow = true;
+	directionalLight.shadow.mapSize.width = 1024; // Shadow map resolution
+	directionalLight.shadow.mapSize.height = 1024;
+	directionalLight.shadow.camera.near = 0.5;
+	directionalLight.shadow.camera.far = 500;
+				
+	camera = new THREE.Camera();
+	scene.add(camera);
+
+	renderer = new THREE.WebGLRenderer({
+		antialias : true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	//renderer.setPixelRatio(window.devicePixelRatio); for best quality -> worse performance
+	renderer.setPixelRatio(2);
+	renderer.setSize(window.innerWidth, window.innerHeight);
+	renderer.domElement.style.position = 'absolute';
+	renderer.domElement.style.top = '0';
+	renderer.domElement.style.left = '0';
+	renderer.domElement.style.width = '100%';
+	renderer.domElement.style.height = '100%';
+
+	// enable shadows
+	renderer.shadowMap.enabled = true;
+	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+	document.body.appendChild( renderer.domElement );
+
+	clock = new THREE.Clock();
+	deltaTime = 0;
+	totalTime = 0;	
+	
+	////////////////////////////////////////////////////////////
+	// setup arToolkitSource
+	////////////////////////////////////////////////////////////
+
+	arToolkitSource = new THREEx.ArToolkitSource({
+		sourceType: 'webcam',
+	});
+
+	function onResize()
+	{
+		arToolkitSource.onResize()	
+		arToolkitSource.copySizeTo(renderer.domElement)	
+		if ( arToolkitContext.arController !== null )
+		{
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+		}	
+	}
+
+	arToolkitSource.init(
+		function onReady() {
+			console.log('Webcam initialized successfully');
+			onResize();
+		},
+		function onError(err) {
+			console.error('Webcam initialization failed:', err);
+			alert('Webcam Error: ' + err.message);
+		}
+	);
+	
+	// handle resize event
+	window.addEventListener('resize', function(){
+		onResize()
+	});
+	
+	////////////////////////////////////////////////////////////
+	// setup arToolkitContext
+	////////////////////////////////////////////////////////////	
+
+	// create atToolkitContext
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: 'data/camera_para.dat',
+		detectionMode: 'mono'
+	});
+	
+	// copy projection matrix to camera when initialization complete
+	arToolkitContext.init( function onCompleted(){
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	});
+
+	////////////////////////////////////////////////////////////
+	// setup markerRoots
+	////////////////////////////////////////////////////////////
+
+	// build markerControls
+	markerRoot1 = new THREE.Group();
+	scene.add(markerRoot1);
+	let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
+		type: 'pattern', patternUrl: "data/hiro.patt",
+	})
+
+	// Shadow receiving plane
+	let planeGeometry = new THREE.PlaneGeometry(2, 2); // Plane size
+	let planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 }); 
+	let shadowPlane = new THREE.Mesh(planeGeometry, planeMaterial);
+
+	shadowPlane.rotation.x = -Math.PI / 2;
+	shadowPlane.position.y = 0;
+	shadowPlane.receiveShadow = true; // Enable receiving shadows
+	markerRoot1.add(shadowPlane);	
+}
+
+function loadModels() {
+	function onProgress(xhr) { console.log((xhr.loaded / xhr.total * 100) + '% loaded'); }
+	function onError(xhr) { console.log('An error happened'); }
+
+	// Load Model 1
+	new THREE.MTLLoader()
+		.setPath( 'models/' )
+		.load( 'fish-2.mtl', function ( materials ) {
+			materials.preload();
+			new THREE.OBJLoader()
+				.setMaterials( materials )
+				.setPath( 'models/' )
+				.load( 'fish-2.obj', function ( group ) {
+					model = group.children[0];
+					model.material.side = THREE.DoubleSide;
+					model.position.y = 0.25;
+					model.scale.set(0.25,0.25,0.25);
+					markerRoot1.add(model);
+					
+					model.visible = false; 
+					models['model1'] = model; 
+					switchModel('model1');
+				}, onProgress, onError );
+		});
+	
+	// Load Model 2 (GLTF/GLB with Draco Compression)
+    const dracoLoader = new THREE.DRACOLoader();
+    dracoLoader.setDecoderPath('js/draco/'); // Path to the Draco decoder files
+	dracoLoader.preload();
+
+    // Load the GLTF model with Draco compression 
+    const gltfLoader = new THREE.GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader); 
+    
+    gltfLoader.load(
+        'models/trigoR.glb', // Path to Draco-compressed GLB model
+        function (glb) {
+            let model = glb.scene;
+			model.position.y = 1;
+            model.scale.set(0.25, 0.25, 0.25);
+
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.material.transparent = true;  // Enable transparency
+                    child.material.opacity = 1;       // Set opacity (change value as needed)
+                    child.material.side = THREE.FrontSide; // Only render the front faces
+					child.castShadow = true;
+      				child.receiveShadow = true;
+                }
+            });
+
+            model.visible = false;
+            markerRoot1.add(model);
+            models['model2'] = model;
+            
+        },
+        onProgress,
+        onError
+    );
+
+	// Load Model 3 (GLTF/GLB with Draco Compression)
+	gltfLoader.load(
+        'models/waspR.glb', // Path to Draco-compressed GLB model
+        function (glb) {
+            let model = glb.scene;
+			model.position.y = .25;
+            model.scale.set(0.25, 0.25, 0.25);
+
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.material.transparent = true;  // Enable transparency
+                    child.material.opacity = 1;       // Set opacity (change value as needed)
+                    child.material.side = THREE.FrontSide; // Only render the front faces
+					child.castShadow = true;
+      				child.receiveShadow = true;
+                }
+            });
+
+            model.visible = false;
+            markerRoot1.add(model);
+            models['model3'] = model;
+            
+        },
+        onProgress,
+        onError
+    );
+
+	// Load Model 4 (GLTF/GLB with Draco Compression)
+	gltfLoader.load(
+        'models/mathematikon.glb', // Path to Draco-compressed GLB model
+        function (glb) {
+            let model = glb.scene;
+			model.position.y = .22;
+            model.scale.set(0.25, 0.25, 0.25);
+
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.material.transparent = true;  // Enable transparency
+                    child.material.opacity = 1;       // Set opacity (change value as needed)
+                    child.material.side = THREE.FrontSide; // Only render the front faces
+					child.castShadow = true;
+      				child.receiveShadow = true;
+                }
+            });
+
+            model.visible = false;
+            markerRoot1.add(model);
+            models['model4'] = model;
+            
+        },
+        onProgress,
+        onError
+    );
+	// Mouse and Touch Listeners for Rotation and Zoom
+	renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+    renderer.domElement.addEventListener('pointermove', onPointerMove, false);
+    renderer.domElement.addEventListener('pointerup', onPointerUp, false)
+	renderer.domElement.addEventListener('wheel', onMouseWheel, false);
+}
+
+var isDragging = false;
+var previousMousePosition = { x: 0, y: 0 };
+var currentScale = 0.5; // Initial scale of the model
+
+var isPinching = false;  // To check if the user is currently pinching
+var initialPinchDistance = 0;  // Initial distance between two fingers during pinch
+var previousPinchDistance = 0; // Distance between fingers in the previous frame
+var isResizing = false; // Flag to check if resizing is happening
+
+document.addEventListener('touchstart', onRotationTouchStart);
+document.addEventListener('touchmove', onRotationTouchMove);
+document.addEventListener('touchend', onRotationTouchEnd);
+renderer.domElement.addEventListener('touchstart', onTouchStart, false);
+renderer.domElement.addEventListener('touchmove', onTouchMove, false);
+renderer.domElement.addEventListener('touchend', onTouchEnd, false);
+
+function onPointerDown(event) {
+    isDragging = true;
+    previousMousePosition = { x: event.clientX, y: event.clientY };
+}
+
+function onPointerMove(event) {
+    if (!isDragging || !currentModel) return;
+
+    const deltaMove = {
+        x: event.clientX - previousMousePosition.x,
+        y: event.clientY - previousMousePosition.y
+    };
+
+    // Rotate mesh based on mouse movement
+    currentModel.rotation.y += deltaMove.x * 0.004; // Rotate around Y-axis
+    currentModel.rotation.x += deltaMove.y * 0.004; // Rotate around X-axis
+
+    previousMousePosition = { x: event.clientX, y: event.clientY };
+}
+
+function onPointerUp() {
+    isDragging = false;
+}
+
+let previousTouchPosition = { x: 0, y: 0 };
+
+// Touch event handlers for rotation
+function onRotationTouchStart(event) {
+    if (event.touches.length < 2) {
+        isDragging = true;
+
+        // Only take the first touch point for rotation
+        previousTouchPositionForRotation = {
+            x: event.touches[0].clientX,
+            y: event.touches[0].clientY
+        };
+    }
+}
+
+function onRotationTouchMove(event) {
+    if (!isDragging || !currentModel || isResizing) return; // Don't rotate if resizing is happening
+
+    // Prevent default to avoid scrolling or zooming
+    event.preventDefault();
+
+    // Calculate movement based on touch points
+    const deltaMove = {
+        x: event.touches[0].clientX - previousTouchPositionForRotation.x,
+        y: event.touches[0].clientY - previousTouchPositionForRotation.y
+    };
+
+    // Rotate the model
+    currentModel.rotation.y += deltaMove.x * 0.01; // Rotate around Y-axis
+    currentModel.rotation.x += deltaMove.y * 0.01; // Rotate around X-axis
+
+    previousTouchPositionForRotation = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+}
+
+function onRotationTouchEnd() {
+    isDragging = false;
+}
+
+function onMouseWheel(event) {
+    const scaleChange = event.deltaY > 0 ? 0.9 : 1.1; // Scroll down reduces scale, up increases
+    currentScale *= scaleChange;
+    currentScale = Math.max(0.1, Math.min(currentScale, 5)); // Clamp scale
+    if (currentModel) {
+        currentModel.scale.set(currentScale, currentScale, currentScale);
+    }
+}
+
+// Touch event handler for resizing (pinch)
+function onTouchStart(event) {
+    if (event.touches.length === 2) { // If there are two touch points initiate the pinch gesture
+        isPinching = true;
+        isResizing = true; // Set the resizing flag
+        isDragging = false; // Prevent rotation while resizing
+        initialPinchDistance = getTouchDistance(event.touches[0], event.touches[1]);
+    }
+}
+
+// pinch zoom model resize functions
+function onTouchMove(event) {
+    if (!isPinching || event.touches.length !== 2) return;  // Ensure pinch is ongoing
+
+    if (isPinching) {
+        event.preventDefault(); // Prevent the default zoom behavior on iOS
+
+        const currentPinchDistance = getTouchDistance(event.touches[0], event.touches[1]);
+        const scaleFactor = currentPinchDistance / initialPinchDistance;
+
+        if (currentModel) {
+            currentModel.scale.set(currentScale * scaleFactor, currentScale * scaleFactor, currentScale * scaleFactor);
+        }
+
+        previousPinchDistance = currentPinchDistance;
+    }
+}
+
+function onTouchEnd(event) {
+    if (event.touches.length < 2) {
+        isPinching = false;  // End pinch gesture when there are less than two fingers
+        isResizing = false;  // Reset resizing flag
+        currentScale = currentModel ? currentModel.scale.x : 1; // Update the global scale
+    }
+}
+
+function getTouchDistance(touch1, touch2) {
+    const dx = touch2.pageX - touch1.pageX;
+    const dy = touch2.pageY - touch1.pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+
+let modelOpacity = {
+    model1: 1,
+    model2: 1,
+    model3: 1,
+    model4: 1
+};
+
+function switchModel(selectedModel) {
+    // Hide the currently displayed model
+    if (currentModel) {
+        currentModel.visible = false;
+    }
+
+    // Show the selected model
+    if (models[selectedModel]) {
+        currentModel = models[selectedModel];
+        currentModel.visible = true;
+
+        // Restore the last known opacity for this model
+        let opacitySlider = document.getElementById('opacitySlider');
+        opacitySlider.value = modelOpacity[selectedModel];
+
+        currentModel.traverse(function(child) {
+            if (child.isMesh) {
+                child.material.opacity = modelOpacity[selectedModel];
+            }
+        });
+    }
+}
+
+// Add event listener to the dropdown
+document.getElementById('modelSelector').addEventListener('change', function (event) {
+	switchModel(event.target.value);
+});
+
+// Add event listener to the slider to adjust opacity
+document.getElementById('opacitySlider').addEventListener('input', function(event) {
+    const opacityValue = parseFloat(event.target.value);
+
+    if (currentModel) {
+        // Store the new opacity value for the selected model
+        let selectedModel = document.getElementById('modelSelector').value;
+        modelOpacity[selectedModel] = opacityValue;
+
+        currentModel.traverse(function(child) {
+            if (child.isMesh) {
+                child.material.opacity = opacityValue;
+            }
+        });
+    }
+});
+
+function getDistanceFromCameraToMarker(marker) {
+    // Extract translation (x, y, z) from the marker's transformation matrix
+    const position = new THREE.Vector3();
+    marker.getWorldPosition(position); // Get the marker's world position
+
+    // The distance is the length of the position vector
+    const distance = position.length(); // Equivalent to sqrt(x^2 + y^2 + z^2)
+
+    return distance;
+}
+
+function update() {
+    if (arToolkitSource.ready !== false) {
+        arToolkitContext.update(arToolkitSource.domElement);
+    }
+
+    // Get distance from the camera to the marker
+    const distance = getDistanceFromCameraToMarker(markerRoot1);
+    console.log('Distance to marker:', distance.toFixed(2)); // Log distance to console
+}
+
+function render() {
+	renderer.render( scene, camera );
+}
+
+function animate() {
+	requestAnimationFrame(animate);
+	deltaTime = clock.getDelta();
+	totalTime += deltaTime;
+	update();
+	render();
+}
+
+</script>
+
+</body>
+</html>

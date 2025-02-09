@@ -1,0 +1,135 @@
+body 
+{
+	background-color: #d1d1d1;
+	background-repeat: repeat;      /* repeat, no-repeat */
+	background-attachment: fixed;   /* scroll, fixed */
+	background-position: top left;  /* for no-repeat setting: top/bottom, left/right */
+	margin: 5% 5% 0% 5%;            /* top, left, bottom, right or TRBL */
+	
+	font-family: Georgia, Serif;	/* list font names in order of preference */
+	font-weight: normal;            /* normal, bold */
+	font-style: normal;             /* normal, italic */
+	font-variant: normal;           /* normal, small-caps */
+	font-size: 16px;                /* font size */
+	color: #000000;                 /* hexadecimal RGB color code */
+	text-decoration: none;          /* none, underline, overline, line-through */
+	text-align: left;               /* left, right, center, justify */
+}
+
+.fancy
+{
+	min-height: 100px;
+	/* next two lines for elder IE compatibility */
+	height: auto !important; 
+	height: 100px; 
+
+	background-color: #a8defe83;
+	border-color: #000;
+	border-radius: 20px;
+}
+
+.fancy:hover
+{
+	background-color:rgba(0, 64, 138, 0.322);
+}
+
+a 
+{
+	font-size: 20px;
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	color:rgb(0, 0, 0);
+	margin-left: 10px;
+	text-decoration: none;
+
+	transition: all 300ms ease-in-out; 
+}
+
+.toc
+{
+	font-size: 16px;
+}
+
+a:hover 
+{
+	color:rgb(0, 119, 255);
+	transition: all 300ms ease-in-out; 
+}
+
+.superText
+{
+	color: #000;
+}
+
+.bigTitle
+{
+	font-size: 30px;
+	font-family:'Courier New', Courier, monospace;
+	font-weight: bold;
+	color:rgb(0, 0, 0);
+	text-align: center;
+}
+
+option{
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding: 50px;
+}
+
+#modelSelector {
+    position: absolute;
+    width: 200px;
+    height: 50px;
+    top: 15px;
+    left: 10px;
+    
+    font-family: 'Arial', sans-serif; /* Replace 'Arial' with your desired font */
+    font-size: 20px;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    color: rgba(255, 255, 255, 0.882);
+    border: none;
+    outline: none;
+    z-index: 1;
+    cursor: pointer;
+}
+
+#modelSelector:hover {
+    border-color: #ffffff;
+    color: rgb(255, 255, 255);
+}
+
+/* Style the dropdown options */
+#modelSelector option {
+    font-size: 16px;
+    background-color: #000000a1;
+    color: rgba(255, 255, 255, 0.882);
+    border-radius: 5px;
+}
+
+#opacityContainer {
+    position: absolute;            /* Position it absolutely on the page */
+    top: 80px;                     /* Distance from the top of the screen */
+    left: 10px;                    /* Distance from the left of the screen */
+    padding: 10px;                 /* Add some padding inside the box */
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    border-radius: 5px;            /* Rounded corners */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2); /* Add a shadow for a lifted effect */
+    width: 180px;                  /* Set the width of the container */
+    z-index: 100;                  /* Ensure the container is above other content */
+    display: flex;                 /* Use flexbox to align label and slider */
+    flex-direction: column;        /* Stack label and slider vertically */
+    align-items: center;           /* Center the contents horizontally */
+}
+
+label[for="opacitySlider"] {
+    font-family: 'Arial', sans-serif; /* Replace 'Arial' with your desired font */
+    font-size: 20px;               /* Font size for the label */
+    margin-bottom: 8px;            /* Add some space below the label */
+    color: rgba(255, 255, 255, 0.882);
+}
+
+#opacitySlider {
+    width: 100%;                   /* Make the slider fill the container's width */
+}
