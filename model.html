@@ -319,7 +319,7 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
-    if (!isDragging || !currentModel) return;
+    if (!isDragging || !currentModel || isAdjustingOpacity) return;
 
     const deltaMove = {
         x: event.clientX - previousMousePosition.x,
@@ -353,7 +353,7 @@ function onRotationTouchStart(event) {
 }
 
 function onRotationTouchMove(event) {
-    if (!isDragging || !currentModel || isResizing) return; // Don't rotate if resizing is happening
+    if (!isDragging || !currentModel || isResizing || isAdjustingOpacity) return; // Don't rotate if resizing is happening
 
     // Prevent default to avoid scrolling or zooming
     event.preventDefault();
@@ -477,6 +477,15 @@ document.getElementById('opacitySlider').addEventListener('input', function(even
             }
         });
     }
+});
+
+let isAdjustingOpacity = false;
+
+opacitySlider.addEventListener('pointerdown', () => {
+    isAdjustingOpacity = true;
+});
+opacitySlider.addEventListener('pointerup', () => {
+    isAdjustingOpacity = false;
 });
 
 function getDistanceFromCameraToMarker(marker) {
